@@ -1,0 +1,67 @@
+import zipfile
+import os
+import cv2
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score, ConfusionMatrixDisplay
+from skimage.feature import hog
+import matplotlib.pyplot as plt
+
+# 1. Unzip dataset
+with zipfile.ZipFile('test.zip', 'r') as zip_ref:
+    zip_ref.extractall('/mnt/data/dataset')
+
+# 2. Prepare paths
+data_dir = '/mnt/data/dataset'
+
+# 3. Initialize data holders
+X = []
+y = []
+
+# 4. Loop through images and extract HOG features
+image_size = (64, 64)
+
+for label, category in enumerate(['cats', 'dogs']):
+    folder = os.path.join(data_dir, category)
+    for filename in os.listdir(folder):
+        img_path = os.path.join(folder, filename)
+        img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+        if img is not None:
+            img = cv2.resize(img, image_size)
+            features, _ = hog(img, orientations=9, pixels_per_cell=(8, 8),
+                              cells_per_block=(2, 2), block_norm='L2-Hys', visualize=True)
+            X.append(features)
+            y.append(label)
+
+X = np.array(X)
+y = np.array(y)
+
+# 5. Split data
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# 6. Train SVM
+svm = SVC(kernel='linear')
+svm.fit(X_train, y_train)
+
+# 7. Predict
+predictions = svm.predict(X_test)
+
+# 8. Evaluate
+accuracy = accuracy_score(y_test, predictions)
+print(f"Test Accuracy: {accuracy * 100:.2f}%")
+
+# 9. Plot confusion matrix
+ConfusionMatrixDisplay.from_predictions(y_test, predictions, display_labels=['Cat', 'Dog'], cmap=plt.cm.Blues)
+plt.title('Confusion Matrix')
+plt.show()
+
+# 10. Plot number of support vectors per class
+if hasattr(svm, "support_vectors_"):
+    print(f"Number of support vectors: {svm.support_vectors_.shape[0]}")
+    plt.bar(['Cats', 'Dogs'], svm.n_support_)
+    plt.title('Number of Support Vectors per Class')
+    plt.ylabel('Count')
+    plt.show()
+else:
+    print("This SVM model does not expose support vectors.")
